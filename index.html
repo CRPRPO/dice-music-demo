@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Dice Music Prototype</title>
+  <title>Dice Music Chord Prototype</title>
   <style>
     body {
       margin: 0;
@@ -12,95 +12,109 @@
       text-align: center;
     }
     .music-block {
-      width: 100px;
-      height: 100px;
+      width: 80px;
+      height: 80px;
       background: #4caf50;
       position: absolute;
-      top: 150px;
-      left: 50%;
-      transform: translateX(-50%);
       border-radius: 10px;
-      box-shadow: 0 0 10px #4caf50;
+      box-shadow: 0 0 8px #4caf50;
       cursor: grab;
-      z-index: 1000;
+      text-align: center;
+      line-height: 80px;
+      font-size: 24px;
     }
     .drop-zone {
-      width: 150px;
-      height: 150px;
+      width: 100px;
+      height: 100px;
       background: #555;
       border: 2px dashed white;
       position: absolute;
-      top: 350px;
-      left: 50%;
-      transform: translateX(-50%);
       border-radius: 15px;
     }
   </style>
 </head>
 <body>
-  <h1>Dice Music Prototype</h1>
-  <div class="music-block" id="musicBlock">🎵</div>
-  <div class="drop-zone" id="dropZone"></div>
+  <h1>Dice Music - Chord Blocks</h1>
+
+  <!-- Green music blocks -->
+  <div class="music-block" id="block1" style="top: 120px; left: 20%;">1</div>
+  <div class="music-block" id="block2" style="top: 120px; left: 35%;">2</div>
+  <div class="music-block" id="block3" style="top: 120px; left: 50%;">3</div>
+  <div class="music-block" id="block4" style="top: 220px; left: 20%;">4</div>
+  <div class="music-block" id="block5" style="top: 220px; left: 35%;">5</div>
+  <div class="music-block" id="block6" style="top: 220px; left: 50%;">6</div>
+
+  <!-- Drop zones -->
+  <div class="drop-zone" id="drop1" style="top: 400px; left: 25%;"></div>
+  <div class="drop-zone" id="drop2" style="top: 400px; left: 45%;"></div>
+  <div class="drop-zone" id="drop3" style="top: 400px; left: 65%;"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
   <script>
-    const musicBlock = document.getElementById('musicBlock');
-    const dropZone = document.getElementById('dropZone');
+    const chords = {
+      block1: ["C4", "E4", "G4"],
+      block2: ["D4", "F4", "A4"],
+      block3: ["E4", "G4", "B4"],
+      block4: ["F4", "A4", "C5"],
+      block5: ["G4", "B4", "D5"],
+      block6: ["A4", "C5", "E5"]
+    };
 
-    let isDragging = false;
-    let offsetX, offsetY;
+    let draggingBlock = null;
+    let offsetX = 0, offsetY = 0;
 
     function startDrag(e) {
-      isDragging = true;
+      draggingBlock = e.target;
       const clientX = e.touches ? e.touches[0].pageX : e.pageX;
       const clientY = e.touches ? e.touches[0].pageY : e.pageY;
-      offsetX = clientX - musicBlock.offsetLeft;
-      offsetY = clientY - musicBlock.offsetTop;
-      musicBlock.style.cursor = 'grabbing';
-      musicBlock.style.zIndex = 1000;
+      offsetX = clientX - draggingBlock.offsetLeft;
+      offsetY = clientY - draggingBlock.offsetTop;
+      draggingBlock.style.zIndex = 1000;
     }
 
     function dragMove(e) {
-      if (!isDragging) return;
-      e.preventDefault(); // 防止手機滾動畫面
+      if (!draggingBlock) return;
+      e.preventDefault();
       const clientX = e.touches ? e.touches[0].pageX : e.pageX;
       const clientY = e.touches ? e.touches[0].pageY : e.pageY;
-      musicBlock.style.left = `${clientX - offsetX}px`;
-      musicBlock.style.top = `${clientY - offsetY}px`;
+      draggingBlock.style.left = `${clientX - offsetX}px`;
+      draggingBlock.style.top = `${clientY - offsetY}px`;
     }
 
     function endDrag(e) {
-      isDragging = false;
-      musicBlock.style.cursor = 'grab';
-
-      const blockRect = musicBlock.getBoundingClientRect();
-      const zoneRect = dropZone.getBoundingClientRect();
-
-      const isInZone = !(
-        blockRect.right < zoneRect.left ||
-        blockRect.left > zoneRect.right ||
-        blockRect.bottom < zoneRect.top ||
-        blockRect.top > zoneRect.bottom
-      );
-
-      if (isInZone) {
-        const synth = new Tone.Synth().toDestination();
-        Tone.start();
-        synth.triggerAttackRelease("C4", "8n");
-
-        dropZone.style.borderColor = "#4caf50";
-        setTimeout(() => dropZone.style.borderColor = "white", 300);
-      }
+      if (!draggingBlock) return;
+      const blockRect = draggingBlock.getBoundingClientRect();
+      const zones = document.querySelectorAll('.drop-zone');
+      zones.forEach(zone => {
+        const zoneRect = zone.getBoundingClientRect();
+        const isInZone = !(
+          blockRect.right < zoneRect.left ||
+          blockRect.left > zoneRect.right ||
+          blockRect.bottom < zoneRect.top ||
+          blockRect.top > zoneRect.bottom
+        );
+        if (isInZone) {
+          playChord(draggingBlock.id);
+          zone.style.borderColor = "#4caf50";
+          setTimeout(() => zone.style.borderColor = "white", 300);
+        }
+      });
+      draggingBlock = null;
     }
 
-    // 滑鼠事件
-    musicBlock.addEventListener('mousedown', startDrag);
-    document.addEventListener('mousemove', dragMove);
-    document.addEventListener('mouseup', endDrag);
+    function playChord(id) {
+      const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+      Tone.start();
+      synth.triggerAttackRelease(chords[id], "2n");
+    }
 
-    // 觸控事件（手機）
-    musicBlock.addEventListener('touchstart', startDrag);
+    document.querySelectorAll('.music-block').forEach(block => {
+      block.addEventListener('mousedown', startDrag);
+      block.addEventListener('touchstart', startDrag);
+    });
+    document.addEventListener('mousemove', dragMove);
     document.addEventListener('touchmove', dragMove, { passive: false });
+    document.addEventListener('mouseup', endDrag);
     document.addEventListener('touchend', endDrag);
   </script>
 </body>
