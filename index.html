@@ -1,31 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Dice Music Chord Prototype (Hand Control)</title>
+  <meta charset="UTF-8" />
+  <title>Dice Music - Hand Tracking V2</title>
   <style>
-    body, html {
+    html, body {
       margin: 0;
       padding: 0;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
       overflow: hidden;
       font-family: sans-serif;
     }
     #webcam {
-      position: fixed;
+      position: absolute;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
       z-index: 0;
     }
     #canvas {
-      position: fixed;
-      top: 0;
-      left: 0;
+      position: absolute;
       width: 100vw;
       height: 100vh;
       z-index: 1;
+      pointer-events: none;
     }
     .overlay {
       position: absolute;
@@ -37,10 +36,10 @@
     }
     h1 {
       position: absolute;
+      top: 10px;
       width: 100%;
       text-align: center;
       color: white;
-      top: 10px;
       z-index: 3;
     }
     .music-block {
@@ -50,7 +49,6 @@
       position: absolute;
       border-radius: 10px;
       box-shadow: 0 0 8px #4caf50;
-      cursor: grab;
       text-align: center;
       line-height: 80px;
       font-size: 24px;
@@ -68,33 +66,32 @@
   </style>
 </head>
 <body>
-  <!-- 📷 攝影機畫面作為背景 -->
   <video id="webcam" autoplay muted playsinline></video>
-  <!-- 🎨 手部骨架 canvas -->
   <canvas id="canvas"></canvas>
 
-  <!-- 🧱 上層互動區域 -->
   <div class="overlay">
     <h1>Dice Music - Hand Controlled Blocks</h1>
-    <div class="music-block" id="block1" style="top: 120px; left: 20%;">1</div>
-    <div class="music-block" id="block2" style="top: 120px; left: 35%;">2</div>
-    <div class="music-block" id="block3" style="top: 120px; left: 50%;">3</div>
-    <div class="music-block" id="block4" style="top: 220px; left: 20%;">4</div>
-    <div class="music-block" id="block5" style="top: 220px; left: 35%;">5</div>
-    <div class="music-block" id="block6" style="top: 220px; left: 50%;">6</div>
-
+    <div class="music-block" id="block1" style="top: 100px; left: 15%;">1</div>
+    <div class="music-block" id="block2" style="top: 100px; left: 30%;">2</div>
+    <div class="music-block" id="block3" style="top: 100px; left: 45%;">3</div>
+    <div class="music-block" id="block4" style="top: 200px; left: 15%;">4</div>
+    <div class="music-block" id="block5" style="top: 200px; left: 30%;">5</div>
+    <div class="music-block" id="block6" style="top: 200px; left: 45%;">6</div>
     <div class="drop-zone" id="drop1" style="top: 400px; left: 25%;"></div>
     <div class="drop-zone" id="drop2" style="top: 400px; left: 45%;"></div>
     <div class="drop-zone" id="drop3" style="top: 400px; left: 65%;"></div>
   </div>
 
-  <!-- 📚 外部函式庫 -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
 
   <script>
+    const videoElement = document.getElementById('webcam');
+    const canvasElement = document.getElementById('canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
     const chords = {
       block1: ["C4", "E4", "G4"],
       block2: ["D4", "F4", "A4"],
@@ -103,10 +100,6 @@
       block5: ["G4", "B4", "D5"],
       block6: ["A4", "C5", "E5"]
     };
-
-    const videoElement = document.getElementById('webcam');
-    const canvasElement = document.getElementById('canvas');
-    const canvasCtx = canvasElement.getContext('2d');
 
     const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -130,51 +123,46 @@
     let dragging = false;
 
     function onResults(results) {
-      // 🧼 清除前一幀
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       canvasElement.width = window.innerWidth;
       canvasElement.height = window.innerHeight;
-      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-      // 🎨 繪製骨架
-      if (results.multiHandLandmarks) {
-        for (const landmarks of results.multiHandLandmarks) {
-          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
-          drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', radius: 5 });
-        }
-      }
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const hand = results.multiHandLandmarks[0];
 
-      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
-      const hand = results.multiHandLandmarks[0];
-      const [x, y] = [hand[9].x * window.innerWidth, hand[9].y * window.innerHeight];
+        drawConnectors(canvasCtx, hand, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 3 });
+        drawLandmarks(canvasCtx, hand, { color: '#f00', lineWidth: 1 });
 
-      document.querySelectorAll('.music-block').forEach(block => {
-        const rect = block.getBoundingClientRect();
-        const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        const [x, y] = [hand[9].x * canvasElement.width, hand[9].y * canvasElement.height];
+        document.querySelectorAll('.music-block').forEach(block => {
+          const rect = block.getBoundingClientRect();
+          const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
-        if (inside && results.multiHandedness[0].label === 'Right') {
-          const fingerExtended = hand[8].y < hand[6].y;
+          const fingerUp = hand[8].y < hand[6].y;
           const isFist = hand[8].y > hand[6].y && hand[12].y > hand[10].y;
 
-          if (fingerExtended && !dragging) {
+          if (inside && fingerUp && !dragging) {
             Tone.start();
             new Tone.PolySynth().toDestination().triggerAttackRelease(chords[block.id], "8n");
-          } else if (!dragging && !isFist) {
+          } else if (inside && !dragging && !isFist) {
             currentBlock = block;
             dragging = true;
           }
+        });
+
+        if (dragging && currentBlock) {
+          currentBlock.style.left = `${x - currentBlock.offsetWidth / 2}px`;
+          currentBlock.style.top = `${y - currentBlock.offsetHeight / 2}px`;
         }
-      });
 
-      if (dragging && currentBlock) {
-        currentBlock.style.left = `${x - currentBlock.offsetWidth / 2}px`;
-        currentBlock.style.top = `${y - currentBlock.offsetHeight / 2}px`;
+        if (dragging && currentBlock && hand[8].y > hand[6].y && hand[12].y > hand[10].y) {
+          checkDropZone(currentBlock);
+          dragging = false;
+          currentBlock = null;
+        }
       }
-
-      if (dragging && currentBlock && hand[8].y > hand[6].y && hand[12].y > hand[10].y) {
-        checkDropZone(currentBlock);
-        dragging = false;
-        currentBlock = null;
-      }
+      canvasCtx.restore();
     }
 
     function checkDropZone(block) {
