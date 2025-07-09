@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dice Music Prototype</title>
+  <style>
+    body { margin: 0; background: #111; color: white; font-family: sans-serif; text-align: center; }
+    canvas { display: block; margin: auto; background: #222; }
+    .music-block {
+      width: 100px;
+      height: 100px;
+      background: #4caf50;
+      position: absolute;
+      top: 150px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 10px;
+      box-shadow: 0 0 10px #4caf50;
+      cursor: grab;
+    }
+    .drop-zone {
+      width: 150px;
+      height: 150px;
+      background: #555;
+      border: 2px dashed white;
+      position: absolute;
+      top: 350px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Dice Music Prototype</h1>
+  <div class="music-block" id="musicBlock">🎵</div>
+  <div class="drop-zone" id="dropZone"></div>
+  
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+  <script>
+    const musicBlock = document.getElementById('musicBlock');
+    const dropZone = document.getElementById('dropZone');
+
+    let isDragging = false;
+    let offsetX, offsetY;
+
+    musicBlock.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      offsetX = e.offsetX;
+      offsetY = e.offsetY;
+      musicBlock.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging) {
+        musicBlock.style.left = `${e.pageX - offsetX}px`;
+        musicBlock.style.top = `${e.pageY - offsetY}px`;
+      }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (isDragging) {
+        isDragging = false;
+        musicBlock.style.cursor = 'grab';
+
+        const blockRect = musicBlock.getBoundingClientRect();
+        const zoneRect = dropZone.getBoundingClientRect();
+
+        const isInZone = !(
+          blockRect.right < zoneRect.left ||
+          blockRect.left > zoneRect.right ||
+          blockRect.bottom < zoneRect.top ||
+          blockRect.top > zoneRect.bottom
+        );
+
+        if (isInZone) {
+          // Play a music snippet
+          const synth = new Tone.Synth().toDestination();
+          Tone.start();
+          synth.triggerAttackRelease("C4", "8n");
+
+          // Visual feedback
+          dropZone.style.borderColor = "#4caf50";
+          setTimeout(() => dropZone.style.borderColor = "white", 300);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
