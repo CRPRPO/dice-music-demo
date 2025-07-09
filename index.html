@@ -7,16 +7,16 @@
     html, body {
       margin: 0;
       padding: 0;
-      width: 100vw;
-      height: 100vh;
       overflow: hidden;
     }
     #webcam {
-      position: absolute;
+      position: fixed;
+      top: 0;
+      left: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      transform: scaleX(-1); /* ✅ 鏡像翻轉攝影畫面 */
+      transform: scaleX(-1); /* 🔁 鏡像顯示 */
       z-index: 0;
     }
     canvas {
@@ -26,67 +26,61 @@
       z-index: 1;
       pointer-events: none;
     }
-    .music-block {
+    .block {
+      position: absolute;
       width: 80px;
       height: 80px;
       background: #4caf50;
-      border-radius: 10px;
-      position: absolute;
-      top: 100px;
-      left: 40%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
       color: white;
+      font-size: 24px;
+      font-weight: bold;
+      border-radius: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
       z-index: 2;
     }
-    .drop-zone {
+    .zone {
+      position: absolute;
       width: 100px;
       height: 100px;
-      background: #444;
+      background: #555;
       border: 2px dashed white;
-      position: absolute;
-      bottom: 60px;
-      z-index: 1;
-      left: calc(25% + (100px * var(--index)));
+      border-radius: 10px;
+      z-index: 2;
     }
   </style>
 </head>
 <body>
-  <!-- 🎥 攝影畫面背景 -->
   <video id="webcam" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
-  <!-- 🎵 單一綠色音符方塊 -->
-  <div id="block" class="music-block">🎵</div>
-  <!-- 🎯 三個灰色投放區 -->
-  <div class="drop-zone" style="--index: 0;"></div>
-  <div class="drop-zone" style="--index: 1;"></div>
-  <div class="drop-zone" style="--index: 2;"></div>
 
-  <!-- 載入 MediaPipe 與 Tone.js -->
+  <div class="block" id="musicBlock" style="top: 100px; left: 50px;">🎵</div>
+  <div class="zone" style="bottom: 50px; left: 20%;"></div>
+  <div class="zone" style="bottom: 50px; left: 45%;"></div>
+  <div class="zone" style="bottom: 50px; left: 70%;"></div>
+
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+
   <script>
-    const videoElement = document.getElementById('webcam');
+    const webcamElement = document.getElementById('webcam');
     const canvasElement = document.getElementById('canvas');
     const canvasCtx = canvasElement.getContext('2d');
-    const block = document.getElementById('block');
+    const musicBlock = document.getElementById('musicBlock');
+    const synth = new Tone.PolySynth().toDestination();
 
-    canvasElement.width = window.innerWidth;
-    canvasElement.height = window.innerHeight;
-
-    const chords = ["C4", "E4", "G4"];
-
-    function playChord() {
-      Tone.start();
-      new Tone.PolySynth().toDestination().triggerAttackRelease(chords, "8n");
+    function resizeCanvas() {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
     }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
     const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
     hands.setOptions({
       maxNumHands: 1,
@@ -94,38 +88,37 @@
       minDetectionConfidence: 0.7,
       minTrackingConfidence: 0.7
     });
-    hands.onResults(onResults);
 
-    const camera = new Camera(videoElement, {
-      onFrame: async () => await hands.send({ image: videoElement }),
-      width: 640,
-      height: 480
-    });
-    camera.start();
-
-    function onResults(results) {
+    hands.onResults(results => {
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      canvasCtx.drawImage(
-        results.image, 0, 0,
-        canvasElement.width, canvasElement.height);
-
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const landmarks = results.multiHandLandmarks[0];
         drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
         drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 1 });
 
-        const blockRect = block.getBoundingClientRect();
-        const hit = landmarks.some(point => {
-          const x = (1 - point.x) * window.innerWidth; // 因為鏡像所以 1 - x
-          const y = point.y * window.innerHeight;
-          return x >= blockRect.left && x <= blockRect.right &&
-                 y >= blockRect.top && y <= blockRect.bottom;
-        });
-        if (hit) playChord();
+        const indexTip = landmarks[8];
+        const x = (1 - indexTip.x) * window.innerWidth; // 🔁 鏡像轉換
+        const y = indexTip.y * window.innerHeight;
+
+        const rect = musicBlock.getBoundingClientRect();
+        const within = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        if (within) {
+          Tone.start();
+          synth.triggerAttackRelease(["C4", "E4", "G4"], "8n");
+        }
       }
       canvasCtx.restore();
-    }
+    });
+
+    const camera = new Camera(webcamElement, {
+      onFrame: async () => {
+        await hands.send({ image: webcamElement });
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
   </script>
 </body>
 </html>
