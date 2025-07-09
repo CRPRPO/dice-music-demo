@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dice Music - 6 Blocks & Play Zones</title>
+  <title>Dice Music Playback</title>
   <style>
     html, body {
       margin: 0;
@@ -39,35 +39,52 @@
       color: white;
       font-weight: bold;
       z-index: 3;
-      transition: box-shadow 0.2s ease;
     }
     .block.active {
-      box-shadow: 0 0 20px 5px yellow;
+      box-shadow: 0 0 20px 10px yellow;
     }
     .zone {
       position: absolute;
-      width: 100px;
-      height: 100px;
+      width: 110px;
+      height: 110px;
       background: #555;
       border: 2px dashed white;
       border-radius: 10px;
       z-index: 2;
+      left: calc(33% * var(--i));
+      top: 45%;
+      transform: translateX(-50%);
+    }
+    #playButton {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: red;
+      color: white;
+      font-size: 20px;
+      font-weight: bold;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 10px;
+      left: 90%;
+      top: 80%;
+      transform: translate(-50%, -50%);
+      z-index: 4;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <!-- 🎥 視訊鏡頭 -->
   <video id="webcam" autoplay muted playsinline></video>
-
-  <!-- ✏️ 用於骨架描繪的畫布 -->
   <canvas id="canvas"></canvas>
 
-  <!-- 🎯 灰色播放區域 -->
-  <div class="zone" style="bottom: 50px; left: 20%;"></div>
-  <div class="zone" style="bottom: 50px; left: 45%;"></div>
-  <div class="zone" style="bottom: 50px; left: 70%;"></div>
+  <!-- 放大 & 垂直置中的灰色框 -->
+  <div class="zone" style="--i: 1;"></div>
+  <div class="zone" style="--i: 2;"></div>
+  <div class="zone" style="--i: 3;"></div>
 
-  <!-- 🎵 六個綠色音符區塊 -->
+  <!-- 維持先前位置的綠色音樂塊 -->
   <div class="block" id="block0" style="left: 10%; top: 10%;">🎵</div>
   <div class="block" id="block1" style="left: 30%; top: 10%;">🎶</div>
   <div class="block" id="block2" style="left: 50%; top: 10%;">🎵</div>
@@ -75,26 +92,16 @@
   <div class="block" id="block4" style="left: 20%; top: 25%;">🎵</div>
   <div class="block" id="block5" style="left: 60%; top: 25%;">🎶</div>
 
-  <!-- 📦 函式庫引用 -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+  <!-- 播放鍵 -->
+  <div id="playButton">播放</div>
 
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
   <script>
-    // 🎛️ 變數初始化與元件選取
     const blocks = [...document.querySelectorAll('.block')];
     const zones = [...document.querySelectorAll('.zone')];
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const webcam = document.getElementById('webcam');
+    const playButton = document.getElementById('playButton');
     const synth = new Tone.PolySynth().toDestination();
 
-    let draggingId = null;
-    let offsetX = 0;
-    let offsetY = 0;
-
-    // 🎼 六組和弦
     const chords = [
       ["C4", "E4", "G4"],
       ["D4", "F4", "A4"],
@@ -104,88 +111,21 @@
       ["A4", "C5", "E5"]
     ];
 
-    // 🖼️ 調整畫布尺寸
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    // ✋ 啟用 MediaPipe Hands
-    const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
-
-    // 📡 偵測結果回傳後的處理函式
-    hands.onResults(results => {
-      ctx.save();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (!results.multiHandLandmarks.length) return;
-
-      const lm = results.multiHandLandmarks[0];
-      drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
-      drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
-
-      // 🟢 Palm center 定義為 6,10,14,18 節點平均位置
-      const palmCenter = {
-        x: (lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 4,
-        y: (lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 4
-      };
-      const x = (1 - palmCenter.x) * window.innerWidth;
-      const y = palmCenter.y * window.innerHeight;
-
-      // ✊ 判斷是否握拳（四指中任三指彎曲）
-      const curled = [
-        lm[8].y > lm[6].y,
-        lm[12].y > lm[10].y,
-        lm[16].y > lm[14].y,
-        lm[20].y > lm[18].y
-      ];
-      const curledCount = curled.filter(v => v).length;
-      const isFist = curledCount >= 3;
-
-      // 🧲 如果剛開始握拳，檢查是否抓到方塊
-      if (isFist && draggingId === null) {
+    playButton.onclick = async () => {
+      await Tone.start();
+      // 對每個 zone 檢查是否有 block
+      zones.forEach(zone => {
+        const zRect = zone.getBoundingClientRect();
         for (let i = 0; i < blocks.length; i++) {
-          const rect = blocks[i].getBoundingClientRect();
-          if (x > rect.left && x < rect.right && y > rect.top && y < rect.bottom) {
-            draggingId = i;
-            offsetX = x - rect.left;
-            offsetY = y - rect.top;
-            blocks[i].classList.add('active'); // 🌟 發光效果
-            break;
+          const bRect = blocks[i].getBoundingClientRect();
+          const hit = !(bRect.right < zRect.left || bRect.left > zRect.right || bRect.bottom < zRect.top || bRect.top > zRect.bottom);
+          if (hit) {
+            synth.triggerAttackRelease(chords[i], "2n");
+            break; // 一格只放一塊
           }
         }
-      }
-
-      // 🛠️ 拖曳進行中 or 放下觸發播放
-      if (draggingId !== null) {
-        if (isFist) {
-          blocks[draggingId].style.left = `${x - offsetX}px`;
-          blocks[draggingId].style.top = `${y - offsetY}px`;
-        } else {
-          const blockRect = blocks[draggingId].getBoundingClientRect();
-          for (let z of zones) {
-            const zRect = z.getBoundingClientRect();
-            const hit = !(blockRect.right < zRect.left || blockRect.left > zRect.right || blockRect.bottom < zRect.top || blockRect.top > zRect.bottom);
-            if (hit) {
-              Tone.start();
-              synth.triggerAttackRelease(chords[draggingId], "2n");
-            }
-          }
-          blocks[draggingId].classList.remove('active'); // ✨ 移除發光
-          draggingId = null;
-        }
-      }
-      ctx.restore();
-    });
-
-    // 📷 啟用攝影機串流
-    new Camera(webcam, {
-      onFrame: async () => await hands.send({ image: webcam }),
-      width: 640,
-      height: 480
-    }).start();
+      });
+    };
   </script>
 </body>
 </html>
