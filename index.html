@@ -40,6 +40,10 @@
       color: white;
       font-weight: bold;
       z-index: 3;
+      transition: box-shadow 0.2s ease-in-out;
+    }
+    .block.grabbed {
+      box-shadow: 0 0 20px 10px yellow;
     }
     .zone {
       position: absolute;
@@ -135,7 +139,6 @@
       drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
       drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
 
-      // 計算 palm center 為抓握判定點（不含拇指）
       const palmCenter = {
         x: (lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 4,
         y: (lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 4
@@ -143,7 +146,6 @@
       const x = (1 - palmCenter.x) * window.innerWidth;
       const y = palmCenter.y * window.innerHeight;
 
-      // 握拳判定：非拇指中任 3 指彎曲
       const curled = [
         lm[8].y > lm[6].y,
         lm[12].y > lm[10].y,
@@ -160,6 +162,7 @@
             draggingId = i;
             offsetX = x - rect.left;
             offsetY = y - rect.top;
+            blocks[i].classList.add("grabbed");
             break;
           }
         }
@@ -170,26 +173,33 @@
           blocks[draggingId].style.left = `${x - offsetX}px`;
           blocks[draggingId].style.top = `${y - offsetY}px`;
         } else {
+          blocks[draggingId].classList.remove("grabbed");
           draggingId = null;
         }
       }
 
-      // 檢查是否在播放按鈕範圍內並握拳
       const palmX = (1 - (lm[0].x + lm[1].x + lm[2].x + lm[3].x + lm[4].x + lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 9) * window.innerWidth;
       const palmY = ((lm[0].y + lm[1].y + lm[2].y + lm[3].y + lm[4].y + lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 9) * window.innerHeight;
       const playRect = playButton.getBoundingClientRect();
       if (palmX > playRect.left && palmX < playRect.right && palmY > playRect.top && palmY < playRect.bottom && isFist) {
         Tone.start();
+        let playQueue = [];
         zones.forEach(zone => {
           const zoneRect = zone.getBoundingClientRect();
           blocks.forEach((block, index) => {
             const blockRect = block.getBoundingClientRect();
             const isInZone = !(blockRect.right < zoneRect.left || blockRect.left > zoneRect.right || blockRect.bottom < zoneRect.top || blockRect.top > zoneRect.bottom);
             if (isInZone) {
-              synth.triggerAttackRelease(chords[index], "1m");
+              playQueue.push(() => synth.triggerAttackRelease(chords[index], "1m"));
             }
           });
         });
+        (async () => {
+          for (let fn of playQueue) {
+            fn();
+            await new Promise(r => setTimeout(r, 1500));
+          }
+        })();
       }
       ctx.restore();
     });
