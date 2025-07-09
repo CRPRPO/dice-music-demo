@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dice Music - Drag with Fist (Optimized)</title>
+  <title>Dice Music - 6 Blocks & Play Zones</title>
   <style>
     html, body {
       margin: 0;
@@ -32,16 +32,13 @@
       width: 80px;
       height: 80px;
       background: #4caf50;
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
       border-radius: 10px;
       display: flex;
       justify-content: center;
       align-items: center;
-      z-index: 2;
-      left: calc(50% - 40px);
-      top: 120px;
+      color: white;
+      font-weight: bold;
+      z-index: 3; /* 確保在灰色區上方 */
     }
     .zone {
       position: absolute;
@@ -57,97 +54,104 @@
 <body>
   <video id="webcam" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
-  <div class="block" id="musicBlock">🎵</div>
   <div class="zone" style="bottom: 50px; left: 20%;"></div>
   <div class="zone" style="bottom: 50px; left: 45%;"></div>
   <div class="zone" style="bottom: 50px; left: 70%;"></div>
 
+  <div class="block" id="block0" style="left: 10%; top: 10%;">🎵</div>
+  <div class="block" id="block1" style="left: 30%; top: 10%;">🎶</div>
+  <div class="block" id="block2" style="left: 50%; top: 10%;">🎵</div>
+  <div class="block" id="block3" style="left: 70%; top: 10%;">🎶</div>
+  <div class="block" id="block4" style="left: 20%; top: 25%;">🎵</div>
+  <div class="block" id="block5" style="left: 60%; top: 25%;">🎶</div>
+
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
 
   <script>
-    const webcamElement = document.getElementById('webcam');
-    const canvasElement = document.getElementById('canvas');
-    const canvasCtx = canvasElement.getContext('2d');
-    const musicBlock = document.getElementById('musicBlock');
+    const blocks = [...document.querySelectorAll('.block')];
+    const zones = [...document.querySelectorAll('.zone')];
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const webcam = document.getElementById('webcam');
+    const synth = new Tone.PolySynth().toDestination();
+
+    let draggingId = null;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    const chords = [
+      ["C4", "E4", "G4"],
+      ["D4", "F4", "A4"],
+      ["E4", "G4", "B4"],
+      ["F4", "A4", "C5"],
+      ["G4", "B4", "D5"],
+      ["A4", "C5", "E5"]
+    ];
 
     function resizeCanvas() {
-      canvasElement.width = window.innerWidth;
-      canvasElement.height = window.innerHeight;
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     }
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    const hands = new Hands({
-      locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-    });
-    hands.setOptions({
-      maxNumHands: 1,
-      modelComplexity: 1,
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
-    });
-
-    let dragging = false;
-    let offsetX = 0;
-    let offsetY = 0;
+    const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 
     hands.onResults(results => {
-      canvasCtx.save();
-      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      ctx.save();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!results.multiHandLandmarks.length) return;
 
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        const landmarks = results.multiHandLandmarks[0];
-        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-        drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 1 });
+      const lm = results.multiHandLandmarks[0];
+      drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
+      drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
 
-        const xScale = window.innerWidth;
-        const yScale = window.innerHeight;
+      const isFist = [8, 12, 16, 20].every(i => lm[i].y > lm[i - 2].y);
+      const palm = lm[0];
+      const x = (1 - palm.x) * window.innerWidth;
+      const y = palm.y * window.innerHeight;
 
-        const tipDistance = (a, b) => {
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          return Math.sqrt(dx * dx + dy * dy);
-        };
-
-        // ✅ 判斷是否為握拳（只判斷食指、中指、無名指、小指）
-        const curled = [8, 12, 16, 20].every((tip, i) => {
-          const pip = tip - 2;
-          return landmarks[tip].y > landmarks[pip].y;
-        });
-
-        const palm = landmarks[0];
-        const px = (1 - palm.x) * xScale;
-        const py = palm.y * yScale;
-
-        if (curled) {
-          if (!dragging) {
-            // 初始進入拖曳狀態時記錄相對位置
-            const rect = musicBlock.getBoundingClientRect();
-            offsetX = px - rect.left;
-            offsetY = py - rect.top;
-            dragging = true;
+      if (isFist && draggingId === null) {
+        for (let i = 0; i < blocks.length; i++) {
+          const rect = blocks[i].getBoundingClientRect();
+          if (x > rect.left && x < rect.right && y > rect.top && y < rect.bottom) {
+            draggingId = i;
+            offsetX = x - rect.left;
+            offsetY = y - rect.top;
+            break;
           }
-          // 拖曳中：更新綠色方塊位置
-          musicBlock.style.left = `${px - offsetX}px`;
-          musicBlock.style.top = `${py - offsetY}px`;
-        } else {
-          dragging = false;
         }
       }
 
-      canvasCtx.restore();
+      if (draggingId !== null) {
+        if (isFist) {
+          blocks[draggingId].style.left = `${x - offsetX}px`;
+          blocks[draggingId].style.top = `${y - offsetY}px`;
+        } else {
+          const blockRect = blocks[draggingId].getBoundingClientRect();
+          for (let z of zones) {
+            const zRect = z.getBoundingClientRect();
+            const hit = !(blockRect.right < zRect.left || blockRect.left > zRect.right || blockRect.bottom < zRect.top || blockRect.top > zRect.bottom);
+            if (hit) {
+              Tone.start();
+              synth.triggerAttackRelease(chords[draggingId], "2n");
+            }
+          }
+          draggingId = null;
+        }
+      }
+      ctx.restore();
     });
 
-    const camera = new Camera(webcamElement, {
-      onFrame: async () => {
-        await hands.send({ image: webcamElement });
-      },
+    new Camera(webcam, {
+      onFrame: async () => await hands.send({ image: webcam }),
       width: 640,
       height: 480
-    });
-    camera.start();
+    }).start();
   </script>
 </body>
 </html>
