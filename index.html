@@ -39,6 +39,10 @@
       color: white;
       font-weight: bold;
       z-index: 3;
+      transition: box-shadow 0.2s ease;
+    }
+    .block.active {
+      box-shadow: 0 0 20px 5px yellow;
     }
     .zone {
       position: absolute;
@@ -52,13 +56,18 @@
   </style>
 </head>
 <body>
+  <!-- 🎥 視訊鏡頭 -->
   <video id="webcam" autoplay muted playsinline></video>
+
+  <!-- ✏️ 用於骨架描繪的畫布 -->
   <canvas id="canvas"></canvas>
+
+  <!-- 🎯 灰色播放區域 -->
   <div class="zone" style="bottom: 50px; left: 20%;"></div>
   <div class="zone" style="bottom: 50px; left: 45%;"></div>
   <div class="zone" style="bottom: 50px; left: 70%;"></div>
 
-  <!-- 六個綠色方塊 -->
+  <!-- 🎵 六個綠色音符區塊 -->
   <div class="block" id="block0" style="left: 10%; top: 10%;">🎵</div>
   <div class="block" id="block1" style="left: 30%; top: 10%;">🎶</div>
   <div class="block" id="block2" style="left: 50%; top: 10%;">🎵</div>
@@ -66,12 +75,14 @@
   <div class="block" id="block4" style="left: 20%; top: 25%;">🎵</div>
   <div class="block" id="block5" style="left: 60%; top: 25%;">🎶</div>
 
+  <!-- 📦 函式庫引用 -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
 
   <script>
+    // 🎛️ 變數初始化與元件選取
     const blocks = [...document.querySelectorAll('.block')];
     const zones = [...document.querySelectorAll('.zone')];
     const canvas = document.getElementById('canvas');
@@ -83,6 +94,7 @@
     let offsetX = 0;
     let offsetY = 0;
 
+    // 🎼 六組和弦
     const chords = [
       ["C4", "E4", "G4"],
       ["D4", "F4", "A4"],
@@ -92,6 +104,7 @@
       ["A4", "C5", "E5"]
     ];
 
+    // 🖼️ 調整畫布尺寸
     function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -99,9 +112,11 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    // ✋ 啟用 MediaPipe Hands
     const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 
+    // 📡 偵測結果回傳後的處理函式
     hands.onResults(results => {
       ctx.save();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -111,7 +126,7 @@
       drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
       drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
 
-      // ✅ 改為 palm region（平均 6,10,14,18）作為拖曳參考點
+      // 🟢 Palm center 定義為 6,10,14,18 節點平均位置
       const palmCenter = {
         x: (lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 4,
         y: (lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 4
@@ -119,7 +134,7 @@
       const x = (1 - palmCenter.x) * window.innerWidth;
       const y = palmCenter.y * window.innerHeight;
 
-      // ✅ 握拳判斷（四指中任三指彎曲）
+      // ✊ 判斷是否握拳（四指中任三指彎曲）
       const curled = [
         lm[8].y > lm[6].y,
         lm[12].y > lm[10].y,
@@ -129,6 +144,7 @@
       const curledCount = curled.filter(v => v).length;
       const isFist = curledCount >= 3;
 
+      // 🧲 如果剛開始握拳，檢查是否抓到方塊
       if (isFist && draggingId === null) {
         for (let i = 0; i < blocks.length; i++) {
           const rect = blocks[i].getBoundingClientRect();
@@ -136,11 +152,13 @@
             draggingId = i;
             offsetX = x - rect.left;
             offsetY = y - rect.top;
+            blocks[i].classList.add('active'); // 🌟 發光效果
             break;
           }
         }
       }
 
+      // 🛠️ 拖曳進行中 or 放下觸發播放
       if (draggingId !== null) {
         if (isFist) {
           blocks[draggingId].style.left = `${x - offsetX}px`;
@@ -155,12 +173,14 @@
               synth.triggerAttackRelease(chords[draggingId], "2n");
             }
           }
+          blocks[draggingId].classList.remove('active'); // ✨ 移除發光
           draggingId = null;
         }
       }
       ctx.restore();
     });
 
+    // 📷 啟用攝影機串流
     new Camera(webcam, {
       onFrame: async () => await hands.send({ image: webcam }),
       width: 640,
