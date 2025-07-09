@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dice Music - Drag with Fist</title>
+  <title>Dice Music - Drag with Fist (Optimized)</title>
   <style>
     html, body {
       margin: 0;
@@ -90,6 +90,8 @@
     });
 
     let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
 
     hands.onResults(results => {
       canvasCtx.save();
@@ -109,19 +111,27 @@
           return Math.sqrt(dx * dx + dy * dy);
         };
 
-        const curled = tipDistance(landmarks[4], landmarks[8]) < 0.05 &&
-                       tipDistance(landmarks[8], landmarks[12]) < 0.05 &&
-                       tipDistance(landmarks[12], landmarks[16]) < 0.05 &&
-                       tipDistance(landmarks[16], landmarks[20]) < 0.05;
+        // ✅ 判斷是否為握拳（只判斷食指、中指、無名指、小指）
+        const curled = [8, 12, 16, 20].every((tip, i) => {
+          const pip = tip - 2;
+          return landmarks[tip].y > landmarks[pip].y;
+        });
 
         const palm = landmarks[0];
         const px = (1 - palm.x) * xScale;
         const py = palm.y * yScale;
 
         if (curled) {
-          dragging = true;
-          musicBlock.style.left = `${px - 40}px`;
-          musicBlock.style.top = `${py - 40}px`;
+          if (!dragging) {
+            // 初始進入拖曳狀態時記錄相對位置
+            const rect = musicBlock.getBoundingClientRect();
+            offsetX = px - rect.left;
+            offsetY = py - rect.top;
+            dragging = true;
+          }
+          // 拖曳中：更新綠色方塊位置
+          musicBlock.style.left = `${px - offsetX}px`;
+          musicBlock.style.top = `${py - offsetY}px`;
         } else {
           dragging = false;
         }
