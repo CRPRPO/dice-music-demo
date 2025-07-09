@@ -63,6 +63,9 @@
   <!-- 📷 攝影機畫面作為背景 -->
   <video id="webcam" autoplay muted playsinline></video>
 
+  <!-- 🎨 手部骨架 canvas（會蓋在視訊上） -->
+  <canvas class="overlay" id="canvas"></canvas>
+  
   <!-- 🧱 上層互動區域 -->
   <div class="overlay">
     <h1>Dice Music - Hand Controlled Blocks</h1>
@@ -101,6 +104,9 @@
     // 📸 初始化攝影機與 MediaPipe Hands
     const videoElement = document.getElementById('webcam');
     const hands = new Hands({
+      const canvasElement = document.getElementById('canvas');
+      const canvasCtx = canvasElement.getContext('2d');
+
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
     hands.setOptions({
@@ -123,10 +129,16 @@
     let dragging = false;
 
     function onResults(results) {
-      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
-      const hand = results.multiHandLandmarks[0];
-      const [x, y] = [hand[9].x * window.innerWidth, hand[9].y * window.innerHeight];
-
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      if (results.multiHandLandmarks) {
+  for (const landmarks of results.multiHandLandmarks) {
+    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
+    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', radius: 5 });
+  }
+}
+    
       document.querySelectorAll('.music-block').forEach(block => {
         const rect = block.getBoundingClientRect();
         const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
