@@ -38,7 +38,7 @@
       align-items: center;
       color: white;
       font-weight: bold;
-      z-index: 3; /* 確保在灰色區上方 */
+      z-index: 3;
     }
     .zone {
       position: absolute;
@@ -58,6 +58,7 @@
   <div class="zone" style="bottom: 50px; left: 45%;"></div>
   <div class="zone" style="bottom: 50px; left: 70%;"></div>
 
+  <!-- 六個綠色方塊 -->
   <div class="block" id="block0" style="left: 10%; top: 10%;">🎵</div>
   <div class="block" id="block1" style="left: 30%; top: 10%;">🎶</div>
   <div class="block" id="block2" style="left: 50%; top: 10%;">🎵</div>
@@ -71,6 +72,7 @@
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
 
   <script>
+    // 初始化元素與音源
     const blocks = [...document.querySelectorAll('.block')];
     const zones = [...document.querySelectorAll('.zone')];
     const canvas = document.getElementById('canvas');
@@ -98,9 +100,11 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    // 啟用 MediaPipe Hands
     const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 
+    // 每幀畫面執行
     hands.onResults(results => {
       ctx.save();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -110,11 +114,22 @@
       drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
       drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
 
-      const isFist = [8, 12, 16, 20].every(i => lm[i].y > lm[i - 2].y);
+      // 手掌座標轉畫面比例
       const palm = lm[0];
       const x = (1 - palm.x) * window.innerWidth;
       const y = palm.y * window.innerHeight;
 
+      // 握拳判斷（拇指不計，四指中任三指指尖低於第二關節）
+      const curled = [
+        lm[8].y > lm[6].y,   // 食指
+        lm[12].y > lm[10].y, // 中指
+        lm[16].y > lm[14].y, // 無名指
+        lm[20].y > lm[18].y  // 小指
+      ];
+      const curledCount = curled.filter(v => v).length;
+      const isFist = curledCount >= 3;
+
+      // 啟動拖曳條件
       if (isFist && draggingId === null) {
         for (let i = 0; i < blocks.length; i++) {
           const rect = blocks[i].getBoundingClientRect();
@@ -127,6 +142,7 @@
         }
       }
 
+      // 拖曳移動與放置 + 播放
       if (draggingId !== null) {
         if (isFist) {
           blocks[draggingId].style.left = `${x - offsetX}px`;
@@ -147,6 +163,7 @@
       ctx.restore();
     });
 
+    // 啟動攝影機
     new Camera(webcam, {
       onFrame: async () => await hands.send({ image: webcam }),
       width: 640,
