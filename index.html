@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dice Music - Mirror Tap Fixed</title>
+  <title>Dice Music - Drag with Fist</title>
   <style>
     html, body {
       margin: 0;
@@ -16,7 +16,7 @@
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      transform: scaleX(-1); /* 🔁 鏡像顯示 */
+      transform: scaleX(-1);
       z-index: 0;
     }
     canvas {
@@ -25,7 +25,7 @@
       left: 0;
       z-index: 1;
       pointer-events: none;
-      transform: scaleX(-1); /* 🔁 鏡像骨架 */
+      transform: scaleX(-1);
     }
     .block {
       position: absolute;
@@ -40,7 +40,7 @@
       justify-content: center;
       align-items: center;
       z-index: 2;
-      left: calc(50% - 40px); /* ⬅️ 水平置中 */
+      left: calc(50% - 40px);
       top: 120px;
     }
     .zone {
@@ -57,7 +57,6 @@
 <body>
   <video id="webcam" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
-
   <div class="block" id="musicBlock">🎵</div>
   <div class="zone" style="bottom: 50px; left: 20%;"></div>
   <div class="zone" style="bottom: 50px; left: 45%;"></div>
@@ -66,14 +65,12 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
 
   <script>
     const webcamElement = document.getElementById('webcam');
     const canvasElement = document.getElementById('canvas');
     const canvasCtx = canvasElement.getContext('2d');
     const musicBlock = document.getElementById('musicBlock');
-    const synth = new Tone.PolySynth().toDestination();
 
     function resizeCanvas() {
       canvasElement.width = window.innerWidth;
@@ -92,7 +89,7 @@
       minTrackingConfidence: 0.7
     });
 
-    let hasPlayed = false;
+    let dragging = false;
 
     hands.onResults(results => {
       canvasCtx.save();
@@ -103,19 +100,30 @@
         drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
         drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', lineWidth: 1 });
 
-        const indexTip = landmarks[8];
-        const x = (1 - indexTip.x) * window.innerWidth; // 鏡像轉換
-        const y = indexTip.y * window.innerHeight;
+        const xScale = window.innerWidth;
+        const yScale = window.innerHeight;
 
-        const rect = musicBlock.getBoundingClientRect();
-        const within = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        const tipDistance = (a, b) => {
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          return Math.sqrt(dx * dx + dy * dy);
+        };
 
-        if (within && !hasPlayed) {
-          Tone.start();
-          synth.triggerAttackRelease(["C4", "E4", "G4"], "8n");
-          hasPlayed = true;
-        } else if (!within) {
-          hasPlayed = false;
+        const curled = tipDistance(landmarks[4], landmarks[8]) < 0.05 &&
+                       tipDistance(landmarks[8], landmarks[12]) < 0.05 &&
+                       tipDistance(landmarks[12], landmarks[16]) < 0.05 &&
+                       tipDistance(landmarks[16], landmarks[20]) < 0.05;
+
+        const palm = landmarks[0];
+        const px = (1 - palm.x) * xScale;
+        const py = palm.y * yScale;
+
+        if (curled) {
+          dragging = true;
+          musicBlock.style.left = `${px - 40}px`;
+          musicBlock.style.top = `${py - 40}px`;
+        } else {
+          dragging = false;
         }
       }
 
