@@ -19,13 +19,21 @@
       object-fit: cover;
       z-index: 0;
     }
+    #canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
     .overlay {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      z-index: 1;
+      z-index: 2;
     }
     h1 {
       position: absolute;
@@ -33,7 +41,7 @@
       text-align: center;
       color: white;
       top: 10px;
-      z-index: 2;
+      z-index: 3;
     }
     .music-block {
       width: 80px;
@@ -46,7 +54,7 @@
       text-align: center;
       line-height: 80px;
       font-size: 24px;
-      z-index: 2;
+      z-index: 3;
     }
     .drop-zone {
       width: 100px;
@@ -55,22 +63,19 @@
       border: 2px dashed white;
       position: absolute;
       border-radius: 15px;
-      z-index: 2;
+      z-index: 3;
     }
   </style>
 </head>
 <body>
   <!-- 📷 攝影機畫面作為背景 -->
   <video id="webcam" autoplay muted playsinline></video>
+  <!-- 🎨 手部骨架 canvas -->
+  <canvas id="canvas"></canvas>
 
-  <!-- 🎨 手部骨架 canvas（會蓋在視訊上） -->
-  <canvas class="overlay" id="canvas"></canvas>
-  
   <!-- 🧱 上層互動區域 -->
   <div class="overlay">
     <h1>Dice Music - Hand Controlled Blocks</h1>
-
-    <!-- 🎵 六個和弦音樂方塊 -->
     <div class="music-block" id="block1" style="top: 120px; left: 20%;">1</div>
     <div class="music-block" id="block2" style="top: 120px; left: 35%;">2</div>
     <div class="music-block" id="block3" style="top: 120px; left: 50%;">3</div>
@@ -78,20 +83,18 @@
     <div class="music-block" id="block5" style="top: 220px; left: 35%;">5</div>
     <div class="music-block" id="block6" style="top: 220px; left: 50%;">6</div>
 
-    <!-- 🎯 三個觸發區域 -->
     <div class="drop-zone" id="drop1" style="top: 400px; left: 25%;"></div>
     <div class="drop-zone" id="drop2" style="top: 400px; left: 45%;"></div>
     <div class="drop-zone" id="drop3" style="top: 400px; left: 65%;"></div>
   </div>
 
-  <!-- 📚 載入外部函式庫 -->
+  <!-- 📚 外部函式庫 -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
 
   <script>
-    // 🎵 和弦定義：每個綠色方塊對應一組和弦
     const chords = {
       block1: ["C4", "E4", "G4"],
       block2: ["D4", "F4", "A4"],
@@ -101,12 +104,11 @@
       block6: ["A4", "C5", "E5"]
     };
 
-    // 📸 初始化攝影機與 MediaPipe Hands
     const videoElement = document.getElementById('webcam');
-    const hands = new Hands({
-      const canvasElement = document.getElementById('canvas');
-      const canvasCtx = canvasElement.getContext('2d');
+    const canvasElement = document.getElementById('canvas');
+    const canvasCtx = canvasElement.getContext('2d');
 
+    const hands = new Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
     hands.setOptions({
@@ -124,21 +126,27 @@
     });
     camera.start();
 
-    // 🖐 手勢與拖曳邏輯變數
     let currentBlock = null;
     let dragging = false;
 
     function onResults(results) {
+      // 🧼 清除前一幀
       canvasElement.width = window.innerWidth;
       canvasElement.height = window.innerHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // 🎨 繪製骨架
       if (results.multiHandLandmarks) {
-  for (const landmarks of results.multiHandLandmarks) {
-    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
-    drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', radius: 5 });
-  }
-}
-    
+        for (const landmarks of results.multiHandLandmarks) {
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
+          drawLandmarks(canvasCtx, landmarks, { color: '#FF0000', radius: 5 });
+        }
+      }
+
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+      const hand = results.multiHandLandmarks[0];
+      const [x, y] = [hand[9].x * window.innerWidth, hand[9].y * window.innerHeight];
+
       document.querySelectorAll('.music-block').forEach(block => {
         const rect = block.getBoundingClientRect();
         const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
@@ -148,11 +156,9 @@
           const isFist = hand[8].y > hand[6].y && hand[12].y > hand[10].y;
 
           if (fingerExtended && !dragging) {
-            // 👉 手指點擊播放單音
             Tone.start();
             new Tone.PolySynth().toDestination().triggerAttackRelease(chords[block.id], "8n");
           } else if (!dragging && !isFist) {
-            // ✋ 手掌接觸：啟動拖曳
             currentBlock = block;
             dragging = true;
           }
@@ -165,14 +171,12 @@
       }
 
       if (dragging && currentBlock && hand[8].y > hand[6].y && hand[12].y > hand[10].y) {
-        // ✊ 拳頭動作：放下並播放和弦
         checkDropZone(currentBlock);
         dragging = false;
         currentBlock = null;
       }
     }
 
-    // 🎯 撞擊偵測 + 和弦播放
     function checkDropZone(block) {
       const blockRect = block.getBoundingClientRect();
       document.querySelectorAll('.drop-zone').forEach(zone => {
