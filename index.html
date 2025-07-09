@@ -43,8 +43,8 @@
     }
     .zone {
       position: absolute;
-      width: 110px;
-      height: 110px;
+      width: 121px;
+      height: 121px;
       background: #555;
       border: 2px dashed white;
       border-radius: 10px;
@@ -74,9 +74,9 @@
   <canvas id="canvas"></canvas>
 
   <!-- 灰色播放區 -->
-  <div class="zone" style="left: 30%;"></div>
-  <div class="zone" style="left: 45%;"></div>
-  <div class="zone" style="left: 60%;"></div>
+  <div class="zone" style="left: 35%;"></div>
+  <div class="zone" style="left: 47%;"></div>
+  <div class="zone" style="left: 59%;"></div>
 
   <!-- 六個綠色方塊 -->
   <div class="block" id="block0" style="left: 10%; top: 10%;">🎵</div>
@@ -119,6 +119,10 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    let draggingId = null;
+    let offsetX = 0;
+    let offsetY = 0;
+
     const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 
@@ -130,6 +134,63 @@
       const lm = results.multiHandLandmarks[0];
       drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
       drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
+
+      // 計算 palm center 為抓握判定點（不含拇指）
+      const palmCenter = {
+        x: (lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 4,
+        y: (lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 4
+      };
+      const x = (1 - palmCenter.x) * window.innerWidth;
+      const y = palmCenter.y * window.innerHeight;
+
+      // 握拳判定：非拇指中任 3 指彎曲
+      const curled = [
+        lm[8].y > lm[6].y,
+        lm[12].y > lm[10].y,
+        lm[16].y > lm[14].y,
+        lm[20].y > lm[18].y
+      ];
+      const curledCount = curled.filter(v => v).length;
+      const isFist = curledCount >= 3;
+
+      if (isFist && draggingId === null) {
+        for (let i = 0; i < blocks.length; i++) {
+          const rect = blocks[i].getBoundingClientRect();
+          if (x > rect.left && x < rect.right && y > rect.top && y < rect.bottom) {
+            draggingId = i;
+            offsetX = x - rect.left;
+            offsetY = y - rect.top;
+            break;
+          }
+        }
+      }
+
+      if (draggingId !== null) {
+        if (isFist) {
+          blocks[draggingId].style.left = `${x - offsetX}px`;
+          blocks[draggingId].style.top = `${y - offsetY}px`;
+        } else {
+          draggingId = null;
+        }
+      }
+
+      // 檢查是否在播放按鈕範圍內並握拳
+      const palmX = (1 - (lm[0].x + lm[1].x + lm[2].x + lm[3].x + lm[4].x + lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 9) * window.innerWidth;
+      const palmY = ((lm[0].y + lm[1].y + lm[2].y + lm[3].y + lm[4].y + lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 9) * window.innerHeight;
+      const playRect = playButton.getBoundingClientRect();
+      if (palmX > playRect.left && palmX < playRect.right && palmY > playRect.top && palmY < playRect.bottom && isFist) {
+        Tone.start();
+        zones.forEach(zone => {
+          const zoneRect = zone.getBoundingClientRect();
+          blocks.forEach((block, index) => {
+            const blockRect = block.getBoundingClientRect();
+            const isInZone = !(blockRect.right < zoneRect.left || blockRect.left > zoneRect.right || blockRect.bottom < zoneRect.top || blockRect.top > zoneRect.bottom);
+            if (isInZone) {
+              synth.triggerAttackRelease(chords[index], "1m");
+            }
+          });
+        });
+      }
       ctx.restore();
     });
 
@@ -138,20 +199,6 @@
       width: 640,
       height: 480
     }).start();
-
-    playButton.onclick = async () => {
-      await Tone.start();
-      zones.forEach(zone => {
-        const zoneRect = zone.getBoundingClientRect();
-        blocks.forEach((block, index) => {
-          const blockRect = block.getBoundingClientRect();
-          const isInZone = !(blockRect.right < zoneRect.left || blockRect.left > zoneRect.right || blockRect.bottom < zoneRect.top || blockRect.top > zoneRect.bottom);
-          if (isInZone) {
-            synth.triggerAttackRelease(chords[index], "1m");
-          }
-        });
-      });
-    };
   </script>
 </body>
 </html>
