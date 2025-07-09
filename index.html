@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Dice Music Playback</title>
+  <title>Dice Music - Playback</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
+      background: white;
     }
     #webcam {
       position: fixed;
@@ -40,9 +41,6 @@
       font-weight: bold;
       z-index: 3;
     }
-    .block.active {
-      box-shadow: 0 0 20px 10px yellow;
-    }
     .zone {
       position: absolute;
       width: 110px;
@@ -51,27 +49,23 @@
       border: 2px dashed white;
       border-radius: 10px;
       z-index: 2;
-      left: calc(33% * var(--i));
       top: 45%;
-      transform: translateX(-50%);
     }
     #playButton {
       position: absolute;
-      width: 100px;
-      height: 100px;
-      background: red;
+      right: 50px;
+      bottom: 50px;
+      width: 80px;
+      height: 80px;
+      background-color: red;
       color: white;
+      border-radius: 15px;
       font-size: 20px;
       font-weight: bold;
       display: flex;
       justify-content: center;
       align-items: center;
-      border-radius: 10px;
-      left: 90%;
-      top: 80%;
-      transform: translate(-50%, -50%);
       z-index: 4;
-      cursor: pointer;
     }
   </style>
 </head>
@@ -79,12 +73,12 @@
   <video id="webcam" autoplay muted playsinline></video>
   <canvas id="canvas"></canvas>
 
-  <!-- 放大 & 垂直置中的灰色框 -->
-  <div class="zone" style="--i: 1;"></div>
-  <div class="zone" style="--i: 2;"></div>
-  <div class="zone" style="--i: 3;"></div>
+  <!-- 灰色播放區 -->
+  <div class="zone" style="left: 30%;"></div>
+  <div class="zone" style="left: 45%;"></div>
+  <div class="zone" style="left: 60%;"></div>
 
-  <!-- 維持先前位置的綠色音樂塊 -->
+  <!-- 六個綠色方塊 -->
   <div class="block" id="block0" style="left: 10%; top: 10%;">🎵</div>
   <div class="block" id="block1" style="left: 30%; top: 10%;">🎶</div>
   <div class="block" id="block2" style="left: 50%; top: 10%;">🎵</div>
@@ -92,13 +86,20 @@
   <div class="block" id="block4" style="left: 20%; top: 25%;">🎵</div>
   <div class="block" id="block5" style="left: 60%; top: 25%;">🎶</div>
 
-  <!-- 播放鍵 -->
+  <!-- 播放按鈕 -->
   <div id="playButton">播放</div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+
   <script>
     const blocks = [...document.querySelectorAll('.block')];
     const zones = [...document.querySelectorAll('.zone')];
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const webcam = document.getElementById('webcam');
     const playButton = document.getElementById('playButton');
     const synth = new Tone.PolySynth().toDestination();
 
@@ -111,19 +112,44 @@
       ["A4", "C5", "E5"]
     ];
 
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+
+    hands.onResults(results => {
+      ctx.save();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!results.multiHandLandmarks.length) return;
+
+      const lm = results.multiHandLandmarks[0];
+      drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
+      drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
+      ctx.restore();
+    });
+
+    new Camera(webcam, {
+      onFrame: async () => await hands.send({ image: webcam }),
+      width: 640,
+      height: 480
+    }).start();
+
     playButton.onclick = async () => {
       await Tone.start();
-      // 對每個 zone 檢查是否有 block
       zones.forEach(zone => {
-        const zRect = zone.getBoundingClientRect();
-        for (let i = 0; i < blocks.length; i++) {
-          const bRect = blocks[i].getBoundingClientRect();
-          const hit = !(bRect.right < zRect.left || bRect.left > zRect.right || bRect.bottom < zRect.top || bRect.top > zRect.bottom);
-          if (hit) {
-            synth.triggerAttackRelease(chords[i], "2n");
-            break; // 一格只放一塊
+        const zoneRect = zone.getBoundingClientRect();
+        blocks.forEach((block, index) => {
+          const blockRect = block.getBoundingClientRect();
+          const isInZone = !(blockRect.right < zoneRect.left || blockRect.left > zoneRect.right || blockRect.bottom < zoneRect.top || blockRect.top > zoneRect.bottom);
+          if (isInZone) {
+            synth.triggerAttackRelease(chords[index], "1m");
           }
-        }
+        });
       });
     };
   </script>
