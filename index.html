@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Dice Music Chord Prototype</title>
+  <title>Dice Music Chord Prototype (Hand Control)</title>
   <style>
     body {
       margin: 0;
@@ -10,6 +10,13 @@
       color: white;
       font-family: sans-serif;
       text-align: center;
+    }
+    video {
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      width: 160px;
+      opacity: 0.4;
     }
     .music-block {
       width: 80px;
@@ -34,9 +41,9 @@
   </style>
 </head>
 <body>
-  <h1>Dice Music - Chord Blocks</h1>
+  <h1>Dice Music - Hand Controlled Blocks</h1>
 
-  <!-- Green music blocks -->
+  <!-- Music Blocks -->
   <div class="music-block" id="block1" style="top: 120px; left: 20%;">1</div>
   <div class="music-block" id="block2" style="top: 120px; left: 35%;">2</div>
   <div class="music-block" id="block3" style="top: 120px; left: 50%;">3</div>
@@ -44,13 +51,21 @@
   <div class="music-block" id="block5" style="top: 220px; left: 35%;">5</div>
   <div class="music-block" id="block6" style="top: 220px; left: 50%;">6</div>
 
-  <!-- Drop zones -->
+  <!-- Drop Zones -->
   <div class="drop-zone" id="drop1" style="top: 400px; left: 25%;"></div>
   <div class="drop-zone" id="drop2" style="top: 400px; left: 45%;"></div>
   <div class="drop-zone" id="drop3" style="top: 400px; left: 65%;"></div>
 
+  <!-- Video Feed -->
+  <video id="webcam" autoplay muted playsinline></video>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+
   <script>
+    // 🎵 和弦定義：每個綠色方塊對應一組和弦
     const chords = {
       block1: ["C4", "E4", "G4"],
       block2: ["D4", "F4", "A4"],
@@ -60,32 +75,72 @@
       block6: ["A4", "C5", "E5"]
     };
 
-    let draggingBlock = null;
-    let offsetX = 0, offsetY = 0;
+    // 📸 初始化攝影機與 MediaPipe Hands
+    const videoElement = document.getElementById('webcam');
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.7
+    });
+    hands.onResults(onResults);
 
-    function startDrag(e) {
-      draggingBlock = e.target;
-      const clientX = e.touches ? e.touches[0].pageX : e.pageX;
-      const clientY = e.touches ? e.touches[0].pageY : e.pageY;
-      offsetX = clientX - draggingBlock.offsetLeft;
-      offsetY = clientY - draggingBlock.offsetTop;
-      draggingBlock.style.zIndex = 1000;
+    const camera = new Camera(videoElement, {
+      onFrame: async () => await hands.send({ image: videoElement }),
+      width: 640,
+      height: 480
+    });
+    camera.start();
+
+    // 🖐 手勢與拖曳邏輯變數
+    let currentBlock = null;
+    let dragging = false;
+
+    function onResults(results) {
+      if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+      const hand = results.multiHandLandmarks[0];
+      const [x, y] = [hand[9].x * window.innerWidth, hand[9].y * window.innerHeight];
+
+      document.querySelectorAll('.music-block').forEach(block => {
+        const rect = block.getBoundingClientRect();
+        const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+
+        if (inside && results.multiHandedness[0].label === 'Right') {
+          const fingerExtended = hand[8].y < hand[6].y;
+          const isFist = hand[8].y > hand[6].y && hand[12].y > hand[10].y;
+
+          if (fingerExtended && !dragging) {
+            // 👉 手指點擊播放單音
+            Tone.start();
+            new Tone.PolySynth().toDestination().triggerAttackRelease(chords[block.id], "8n");
+          } else if (!dragging && !isFist) {
+            // ✋ 手掌接觸：啟動拖曳
+            currentBlock = block;
+            dragging = true;
+          }
+        }
+      });
+
+      if (dragging && currentBlock) {
+        currentBlock.style.left = `${x - currentBlock.offsetWidth / 2}px`;
+        currentBlock.style.top = `${y - currentBlock.offsetHeight / 2}px`;
+      }
+
+      if (dragging && currentBlock && hand[8].y > hand[6].y && hand[12].y > hand[10].y) {
+        // ✊ 拳頭動作：放下並播放和弦
+        checkDropZone(currentBlock);
+        dragging = false;
+        currentBlock = null;
+      }
     }
 
-    function dragMove(e) {
-      if (!draggingBlock) return;
-      e.preventDefault();
-      const clientX = e.touches ? e.touches[0].pageX : e.pageX;
-      const clientY = e.touches ? e.touches[0].pageY : e.pageY;
-      draggingBlock.style.left = `${clientX - offsetX}px`;
-      draggingBlock.style.top = `${clientY - offsetY}px`;
-    }
-
-    function endDrag(e) {
-      if (!draggingBlock) return;
-      const blockRect = draggingBlock.getBoundingClientRect();
-      const zones = document.querySelectorAll('.drop-zone');
-      zones.forEach(zone => {
+    // 🎯 撞擊偵測 + 和弦播放
+    function checkDropZone(block) {
+      const blockRect = block.getBoundingClientRect();
+      document.querySelectorAll('.drop-zone').forEach(zone => {
         const zoneRect = zone.getBoundingClientRect();
         const isInZone = !(
           blockRect.right < zoneRect.left ||
@@ -94,28 +149,13 @@
           blockRect.top > zoneRect.bottom
         );
         if (isInZone) {
-          playChord(draggingBlock.id);
+          Tone.start();
+          new Tone.PolySynth().toDestination().triggerAttackRelease(chords[block.id], "2n");
           zone.style.borderColor = "#4caf50";
           setTimeout(() => zone.style.borderColor = "white", 300);
         }
       });
-      draggingBlock = null;
     }
-
-    function playChord(id) {
-      const synth = new Tone.PolySynth(Tone.Synth).toDestination();
-      Tone.start();
-      synth.triggerAttackRelease(chords[id], "2n");
-    }
-
-    document.querySelectorAll('.music-block').forEach(block => {
-      block.addEventListener('mousedown', startDrag);
-      block.addEventListener('touchstart', startDrag);
-    });
-    document.addEventListener('mousemove', dragMove);
-    document.addEventListener('touchmove', dragMove, { passive: false });
-    document.addEventListener('mouseup', endDrag);
-    document.addEventListener('touchend', endDrag);
   </script>
 </body>
 </html>
