@@ -111,25 +111,24 @@
       drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: '#0f0', lineWidth: 2 });
       drawLandmarks(ctx, lm, { color: '#f00', lineWidth: 1 });
 
-      // ✅ 用手掌中心作為拖曳參考點
+      // ✅ 改為 palm region（平均 6,10,14,18）作為拖曳參考點
       const palmCenter = {
-        x: (lm[5].x + lm[17].x) / 2,
-        y: (lm[5].y + lm[17].y) / 2
+        x: (lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 4,
+        y: (lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 4
       };
       const x = (1 - palmCenter.x) * window.innerWidth;
       const y = palmCenter.y * window.innerHeight;
 
       // ✅ 握拳判斷（四指中任三指彎曲）
       const curled = [
-        lm[8].y > lm[6].y,   // 食指
-        lm[12].y > lm[10].y, // 中指
-        lm[16].y > lm[14].y, // 無名指
-        lm[20].y > lm[18].y  // 小指
+        lm[8].y > lm[6].y,
+        lm[12].y > lm[10].y,
+        lm[16].y > lm[14].y,
+        lm[20].y > lm[18].y
       ];
       const curledCount = curled.filter(v => v).length;
       const isFist = curledCount >= 3;
 
-      // ✅ 啟動拖曳（握拳 + 手掌中心與方塊重疊）
       if (isFist && draggingId === null) {
         for (let i = 0; i < blocks.length; i++) {
           const rect = blocks[i].getBoundingClientRect();
@@ -142,7 +141,6 @@
         }
       }
 
-      // ✅ 拖曳中：更新方塊位置
       if (draggingId !== null) {
         if (isFist) {
           blocks[draggingId].style.left = `${x - offsetX}px`;
