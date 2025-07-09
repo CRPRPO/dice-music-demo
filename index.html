@@ -107,7 +107,6 @@
     const playButton = document.getElementById('playButton');
     const synth = new Tone.PolySynth().toDestination();
 
-    // 定義六個和弦的琶音內容
     const chords = [
       ["C4", "E4", "G4", "C5"],
       ["D4", "F4", "A4", "D5"],
@@ -127,6 +126,7 @@
     let draggingId = null;
     let offsetX = 0;
     let offsetY = 0;
+    let isPlaying = false; // 防止重複觸發播放
 
     const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
@@ -147,7 +147,6 @@
       const x = (1 - palmCenter.x) * window.innerWidth;
       const y = palmCenter.y * window.innerHeight;
 
-      // 調整後的握拳判斷（不含拇指，指尖低於近端指節）
       const curled = [
         lm[8].y > lm[7].y,
         lm[12].y > lm[11].y,
@@ -157,7 +156,6 @@
       const curledCount = curled.filter(v => v).length;
       const isFist = curledCount >= 3;
 
-      // 判斷是否抓取任一綠色方塊
       if (isFist && draggingId === null) {
         for (let i = 0; i < blocks.length; i++) {
           const rect = blocks[i].getBoundingClientRect();
@@ -171,7 +169,6 @@
         }
       }
 
-      // 如果已抓取中，就跟著手掌移動，放開手掌即放下
       if (draggingId !== null) {
         if (isFist) {
           blocks[draggingId].style.left = `${x - offsetX}px`;
@@ -182,11 +179,12 @@
         }
       }
 
-      // 播放按鈕觸發（使用手掌中心 + 握拳）
       const palmX = (1 - (lm[0].x + lm[1].x + lm[2].x + lm[3].x + lm[4].x + lm[6].x + lm[10].x + lm[14].x + lm[18].x) / 9) * window.innerWidth;
       const palmY = ((lm[0].y + lm[1].y + lm[2].y + lm[3].y + lm[4].y + lm[6].y + lm[10].y + lm[14].y + lm[18].y) / 9) * window.innerHeight;
       const playRect = playButton.getBoundingClientRect();
-      if (palmX > playRect.left && palmX < playRect.right && palmY > playRect.top && palmY < playRect.bottom && isFist) {
+
+      if (!isPlaying && palmX > playRect.left && palmX < playRect.right && palmY > playRect.top && palmY < playRect.bottom && isFist) {
+        isPlaying = true;
         Tone.start();
         let playQueue = [];
         zones.forEach(zone => {
@@ -208,6 +206,7 @@
             });
             await new Promise(r => setTimeout(r, 1500));
           }
+          isPlaying = false;
         })();
       }
       ctx.restore();
