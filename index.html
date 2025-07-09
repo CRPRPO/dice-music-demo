@@ -4,8 +4,13 @@
   <meta charset="UTF-8">
   <title>Dice Music Prototype</title>
   <style>
-    body { margin: 0; background: #111; color: white; font-family: sans-serif; text-align: center; }
-    canvas { display: block; margin: auto; background: #222; }
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
     .music-block {
       width: 100px;
       height: 100px;
@@ -17,6 +22,7 @@
       border-radius: 10px;
       box-shadow: 0 0 10px #4caf50;
       cursor: grab;
+      z-index: 1000;
     }
     .drop-zone {
       width: 150px;
@@ -35,7 +41,7 @@
   <h1>Dice Music Prototype</h1>
   <div class="music-block" id="musicBlock">🎵</div>
   <div class="drop-zone" id="dropZone"></div>
-  
+
   <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
   <script>
     const musicBlock = document.getElementById('musicBlock');
@@ -44,47 +50,58 @@
     let isDragging = false;
     let offsetX, offsetY;
 
-    musicBlock.addEventListener('mousedown', (e) => {
+    function startDrag(e) {
       isDragging = true;
-      offsetX = e.offsetX;
-      offsetY = e.offsetY;
+      const clientX = e.touches ? e.touches[0].pageX : e.pageX;
+      const clientY = e.touches ? e.touches[0].pageY : e.pageY;
+      offsetX = clientX - musicBlock.offsetLeft;
+      offsetY = clientY - musicBlock.offsetTop;
       musicBlock.style.cursor = 'grabbing';
-    });
+      musicBlock.style.zIndex = 1000;
+    }
 
-    document.addEventListener('mousemove', (e) => {
-      if (isDragging) {
-        musicBlock.style.left = `${e.pageX - offsetX}px`;
-        musicBlock.style.top = `${e.pageY - offsetY}px`;
+    function dragMove(e) {
+      if (!isDragging) return;
+      e.preventDefault(); // 防止手機滾動畫面
+      const clientX = e.touches ? e.touches[0].pageX : e.pageX;
+      const clientY = e.touches ? e.touches[0].pageY : e.pageY;
+      musicBlock.style.left = `${clientX - offsetX}px`;
+      musicBlock.style.top = `${clientY - offsetY}px`;
+    }
+
+    function endDrag(e) {
+      isDragging = false;
+      musicBlock.style.cursor = 'grab';
+
+      const blockRect = musicBlock.getBoundingClientRect();
+      const zoneRect = dropZone.getBoundingClientRect();
+
+      const isInZone = !(
+        blockRect.right < zoneRect.left ||
+        blockRect.left > zoneRect.right ||
+        blockRect.bottom < zoneRect.top ||
+        blockRect.top > zoneRect.bottom
+      );
+
+      if (isInZone) {
+        const synth = new Tone.Synth().toDestination();
+        Tone.start();
+        synth.triggerAttackRelease("C4", "8n");
+
+        dropZone.style.borderColor = "#4caf50";
+        setTimeout(() => dropZone.style.borderColor = "white", 300);
       }
-    });
+    }
 
-    document.addEventListener('mouseup', (e) => {
-      if (isDragging) {
-        isDragging = false;
-        musicBlock.style.cursor = 'grab';
+    // 滑鼠事件
+    musicBlock.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', dragMove);
+    document.addEventListener('mouseup', endDrag);
 
-        const blockRect = musicBlock.getBoundingClientRect();
-        const zoneRect = dropZone.getBoundingClientRect();
-
-        const isInZone = !(
-          blockRect.right < zoneRect.left ||
-          blockRect.left > zoneRect.right ||
-          blockRect.bottom < zoneRect.top ||
-          blockRect.top > zoneRect.bottom
-        );
-
-        if (isInZone) {
-          // Play a music snippet
-          const synth = new Tone.Synth().toDestination();
-          Tone.start();
-          synth.triggerAttackRelease("C4", "8n");
-
-          // Visual feedback
-          dropZone.style.borderColor = "#4caf50";
-          setTimeout(() => dropZone.style.borderColor = "white", 300);
-        }
-      }
-    });
+    // 觸控事件（手機）
+    musicBlock.addEventListener('touchstart', startDrag);
+    document.addEventListener('touchmove', dragMove, { passive: false });
+    document.addEventListener('touchend', endDrag);
   </script>
 </body>
 </html>
