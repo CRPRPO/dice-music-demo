@@ -4,19 +4,36 @@
   <meta charset="UTF-8">
   <title>Dice Music Chord Prototype (Hand Control)</title>
   <style>
-    body {
+    body, html {
       margin: 0;
-      background: #111;
-      color: white;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
       font-family: sans-serif;
-      text-align: center;
     }
-    video {
+    #webcam {
       position: fixed;
-      right: 10px;
-      bottom: 10px;
-      width: 160px;
-      opacity: 0.4;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
+    }
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    h1 {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      color: white;
+      top: 10px;
+      z-index: 2;
     }
     .music-block {
       width: 80px;
@@ -29,6 +46,7 @@
       text-align: center;
       line-height: 80px;
       font-size: 24px;
+      z-index: 2;
     }
     .drop-zone {
       width: 100px;
@@ -37,28 +55,33 @@
       border: 2px dashed white;
       position: absolute;
       border-radius: 15px;
+      z-index: 2;
     }
   </style>
 </head>
 <body>
-  <h1>Dice Music - Hand Controlled Blocks</h1>
-
-  <!-- Music Blocks -->
-  <div class="music-block" id="block1" style="top: 120px; left: 20%;">1</div>
-  <div class="music-block" id="block2" style="top: 120px; left: 35%;">2</div>
-  <div class="music-block" id="block3" style="top: 120px; left: 50%;">3</div>
-  <div class="music-block" id="block4" style="top: 220px; left: 20%;">4</div>
-  <div class="music-block" id="block5" style="top: 220px; left: 35%;">5</div>
-  <div class="music-block" id="block6" style="top: 220px; left: 50%;">6</div>
-
-  <!-- Drop Zones -->
-  <div class="drop-zone" id="drop1" style="top: 400px; left: 25%;"></div>
-  <div class="drop-zone" id="drop2" style="top: 400px; left: 45%;"></div>
-  <div class="drop-zone" id="drop3" style="top: 400px; left: 65%;"></div>
-
-  <!-- Video Feed -->
+  <!-- 📷 攝影機畫面作為背景 -->
   <video id="webcam" autoplay muted playsinline></video>
 
+  <!-- 🧱 上層互動區域 -->
+  <div class="overlay">
+    <h1>Dice Music - Hand Controlled Blocks</h1>
+
+    <!-- 🎵 六個和弦音樂方塊 -->
+    <div class="music-block" id="block1" style="top: 120px; left: 20%;">1</div>
+    <div class="music-block" id="block2" style="top: 120px; left: 35%;">2</div>
+    <div class="music-block" id="block3" style="top: 120px; left: 50%;">3</div>
+    <div class="music-block" id="block4" style="top: 220px; left: 20%;">4</div>
+    <div class="music-block" id="block5" style="top: 220px; left: 35%;">5</div>
+    <div class="music-block" id="block6" style="top: 220px; left: 50%;">6</div>
+
+    <!-- 🎯 三個觸發區域 -->
+    <div class="drop-zone" id="drop1" style="top: 400px; left: 25%;"></div>
+    <div class="drop-zone" id="drop2" style="top: 400px; left: 45%;"></div>
+    <div class="drop-zone" id="drop3" style="top: 400px; left: 65%;"></div>
+  </div>
+
+  <!-- 📚 載入外部函式庫 -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
